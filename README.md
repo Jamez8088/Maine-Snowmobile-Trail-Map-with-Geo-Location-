@@ -1,6 +1,7 @@
 # Maine Snowmobile Trail Map with Geo-Location
 Using the map layer publically available on Arcgis.com, then places a simple GPS locator icon on the map showing where you are with the majority of snowmobile trails in Maine, easy as that. 
-I do not own the rights to any of these map layers, all map layers are from ArcGIS which can be found here: 
+This is in beta! I'm still working on adding some features and removing bugs, so expect some down time here and there.  
+- I do not own the rights to any of these map layers, all map layers are from ArcGIS which can be found here: 
 
 Points: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois/explore?layer=0&location=44.839697%2C-69.199815%2C12.75
 
