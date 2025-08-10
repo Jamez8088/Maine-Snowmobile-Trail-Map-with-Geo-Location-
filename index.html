@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Maine ITS GPS Map 0.3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<style>
+  html, body, #map {
+    height: 100%;
+    margin: 0;
+  }
+  .leaflet-control-locate {
+    background: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: system-ui, sans-serif;
+    margin-bottom: 4px;
+  }
+  .top-controls {
+    position: absolute;
+    top: 8px;
+    left: 50px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+  }
+  .weather-box {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      sans-serif;
+    font-size: 14px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    max-width: 220px;
+    line-height: 1.3;
+  }
+  .weather-temp {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .weather-forecast {
+    margin-top: 6px;
+    font-style: italic;
+    font-weight: 600;
+  }
+  /* Arrow rotation smooth */
+  .user-arrow-icon svg {
+    transition: transform 200ms linear;
+  }
+  /* New customization menu styles */
+  #colorMenuToggle {
+    position: absolute;
+    top: 100px;
+    right: 8px;
+    z-index: 1001;
+    background: white;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: system-ui, sans-serif;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    user-select: none;
+  }
+  #colorMenu {
+    position: absolute;
+    top: 140px;
+    right: 8px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      sans-serif;
+    font-size: 14px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    max-width: 220px;
+    line-height: 1.3;
+    display: none;
+  }
+  #colorMenu label {
+    display: block;
+    margin: 8px 0 4px;
+  }
+  #colorMenu input[type="color"] {
+    width: 100%;
+    height: 30px;
+    border: none;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="top-controls">
+    <button id="followBtn" class="leaflet-control-locate">Follow: Off</button>
+    <button id="toggleTrails" class="leaflet-control-locate">Trails: On</button>
+    <button id="togglePoints" class="leaflet-control-locate">Points: On</button>
+  </div>
+
+  <div class="weather-box" id="weatherBox">Loading weather…</div>
+
+  <button id="colorMenuToggle">Customize Colors</button>
+  <div id="colorMenu">
+    <label for="pointsColor">Points Color</label>
+    <input type="color" id="pointsColor" value="#0078ff" title="Points fill color" />
+
+    <label for="arrowFillColor">Arrow Fill Color</label>
+    <input type="color" id="arrowFillColor" value="#0078ff" title="Arrow fill color" />
+
+    <label for="arrowStrokeColor">Arrow Stroke Color</label>
+    <input type="color" id="arrowStrokeColor" value="#003d8a" title="Arrow stroke color" />
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Initial map setup
+    const INITIAL_CENTER = [45.0, -69.0];
+    const INITIAL_ZOOM = 7;
+
+    const map = L.map("map", { center: INITIAL_CENTER, zoom: INITIAL_ZOOM });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    // Global layers so toggle works
+    let trailsLayer = null;
+    let pointsLayer = null;
+
+    // Colors (default values)
+    let pointsColor = "#0078ff";
+    let arrowFillColor = "#0078ff";
+    let arrowStrokeColor = "#003d8a";
+
+    // Helper: escape HTML for popups
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // Load polylines (trails)
+    function loadTrails() {
+      return fetch('primary_polylines.geojson')
+        .then(res => res.json())
+        .then(data => {
+          trailsLayer = L.geoJSON(data, {
+            style: (feature) => ({
+              color:
+                feature.properties &&
+                (feature.properties.type === "connector" ||
+                  feature.properties.trail_type === "connector")
+                  ? "#2ecc71"
+                  : "#e74c3c",
+              weight: 3,
+              opacity: 0.95,
+            }),
+            onEachFeature: (feature, layer) => {
+              const props = feature.properties || {};
+              const trailName =
+                props.name || props.trail_name || props.NAME || props.Title || props.Name || "Trail";
+              const trailType = props.type || props.trail_type || props.class || "";
+              let popup = `<strong>${escapeHtml(trailName)}</strong><br/>`;
+              if (trailType) popup += `Type: ${escapeHtml(trailType)}<br/>`;
+              if (props.club) popup += `Club: ${escapeHtml(props.club)}<br/>`;
+              if (props.junction) popup += `Junction: ${escapeHtml(props.junction)}<br/>`;
+              ["surface", "difficulty", "length"].forEach((k) => {
+                if (props[k]) popup += `${escapeHtml(k)}: ${escapeHtml(String(props[k]))}<br/>`;
+              });
+              layer.bindPopup(popup);
+            },
+          }).addTo(map);
+
+          // Fit map to trails bounds if available
+          const bounds = trailsLayer.getBounds();
+          if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 50] });
+        })
+        .catch(err => {
+          console.error("Error loading polylines:", err);
+          alert("Failed to load trail data.");
+        });
+    }
+
+    // Load points layer
+    function loadPoints() {
+      return fetch('points.geojson')
+        .then(res => res.json())
+        .then(data => {
+          pointsLayer = L.geoJSON(data, {
+            pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+              radius: 10,
+              fillColor: pointsColor,
+              color: arrowStrokeColor,
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.9,
+            }),
+            onEachFeature: (feature, layer) => {
+              const props = feature.properties || {};
+              if (props.Name) {
+                layer.bindPopup(`<strong>${escapeHtml(props.Name)}</strong>`);
+              }
+            }
+          }).addTo(map);
+        })
+        .catch(err => {
+          console.error("Error loading points:", err);
+          alert("Failed to load points data.");
+        });
+    }
+
+    // Load layers (trails first, then points for proper layering)
+    loadTrails().then(() => {
+      loadPoints();
+    });
+
+    // === User location arrow marker with rotation ===
+    function createArrowSvg(fill, stroke) {
+      return encodeURIComponent(
+        `<svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2 L20 22 L12 17 L4 22 Z" fill="${fill}" stroke="${stroke}" stroke-width="0.7"/>
+        </svg>`
+      );
+    }
+
+    let arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor);
+
+    let arrowIcon = L.divIcon({
+      className: "user-arrow-icon",
+      html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:36px;height:36px;transform: rotate(0deg);">`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -18],
+    });
+
+    let userMarker = null;
+    let accuracyCircle = null;
+    let follow = false;
+
+    let lastPos = null;
+
+    // === NOAA Weather fetching & display ===
+    const weatherBox = document.getElementById("weatherBox");
+    let lastWeatherPos = null;
+    const WEATHER_DISTANCE_THRESHOLD_M = 500;
+
+    async function fetchNOAAWeather(lat, lon) {
+      try {
+        const pointsRes = await fetch(
+          `https://api.weather.gov/points/${lat},${lon}`
+        );
+        if (!pointsRes.ok) throw new Error("Failed to get points data");
+        const pointsData = await pointsRes.json();
+
+        const stationsUrl = pointsData.properties.observationStations;
+        const forecastUrl = pointsData.properties.forecast;
+
+        const stationsRes = await fetch(stationsUrl);
+        if (!stationsRes.ok) throw new Error("Failed to get stations");
+        const stationsData = await stationsRes.json();
+        const stations = stationsData.features;
+        if (!stations || stations.length === 0)
+          throw new Error("No observation stations found");
+
+        let currentObs = null;
+        for (const station of stations) {
+          const obsUrl = station.id + "/observations/latest";
+          const obsRes = await fetch(obsUrl);
+          if (!obsRes.ok) continue;
+          const obsData = await obsRes.json();
+          if (obsData.properties && obsData.properties.temperature && obsData.properties.textDescription) {
+            currentObs = obsData.properties;
+            break;
+          }
+        }
+        if (!currentObs) throw new Error("No valid current observations found");
+
+        const forecastRes = await fetch(forecastUrl);
+        if (!forecastRes.ok) throw new Error("Failed to get forecast");
+        const forecastData = await forecastRes.json();
+
+        const periods = forecastData.properties.periods || [];
+        const now = new Date();
+        let shortTermForecast = "";
+        for (const p of periods) {
+          const start = new Date(p.startTime);
+          const end = new Date(p.endTime);
+          if (now >= start && now < end) {
+            shortTermForecast = p.shortForecast;
+            break;
+          }
+        }
+        if (!shortTermForecast && periods.length > 0) {
+          shortTermForecast = periods[0].shortForecast;
+        }
+
+        const tempC = currentObs.temperature.value;
+        const tempF = tempC !== null ? Math.round((tempC * 9) / 5 + 32) : "N/A";
+        const conditions = currentObs.textDescription;
+
+        weatherBox.innerHTML = `
+          <div><strong>Current Temp:</strong> ${tempF} °F</div>
+          <div><strong>Conditions:</strong> ${escapeHtml(conditions)}</div>
+          <div class="weather-forecast"><strong>Forecast:</strong> ${escapeHtml(shortTermForecast)}</div>
+        `;
+      } catch (err) {
+        console.error("NOAA weather error:", err);
+        weatherBox.textContent = "Weather unavailable";
+      }
+    }
+
+    function maybeFetchWeather(lat, lon) {
+      if (!lastWeatherPos) {
+        lastWeatherPos = { lat, lon };
+        fetchNOAAWeather(lat, lon);
+        return;
+      }
+      if (distanceMeters(lastWeatherPos.lat, lastWeatherPos.lon, lat, lon) > WEATHER_DISTANCE_THRESHOLD_M) {
+        lastWeatherPos = { lat, lon };
+        fetchNOAAWeather(lat, lon);
+      }
+    }
+
+    // === Handle user location updates ===
+    function onLocation(position) {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      const accuracy = position.coords.accuracy || 0;
+      const deviceHeading = position.coords.heading;
+
+      if (!userMarker) {
+        userMarker = L.marker([lat, lon], { icon: arrowIcon, title: "Your location" }).addTo(map);
+        accuracyCircle = L.circle([lat, lon], { radius: accuracy, opacity: 0.25, fillOpacity: 0.07 }).addTo(map);
+      } else {
+        userMarker.setLatLng([lat, lon]);
+        accuracyCircle.setLatLng([lat, lon]).setRadius(accuracy);
+      }
+
+      let headingToUse = null;
+      if (deviceHeading !== null && !isNaN(deviceHeading)) {
+        headingToUse = deviceHeading;
+      } else if (lastPos) {
+        headingToUse = bearingDegrees(lastPos.lat, lastPos.lon, lat, lon);
+      } else {
+        headingToUse = 0;
+      }
+
+      rotateUserArrow(userMarker, headingToUse);
+      lastPos = { lat, lon, time: Date.now() };
+
+      maybeFetchWeather(lat, lon);
+
+      if (follow) {
+        map.setView([lat, lon], Math.max(map.getZoom(), 13), { animate: true });
+      }
+    }
+
+    function onLocationError(err) {
+      console.warn("Geolocation error", err);
+      if (err && err.code === 1)
+        alert("Location permission denied. Allow location for tracking.");
+      else weatherBox.textContent = "Location unavailable";
+    }
+
+    let watchId = null;
+    function startTracking() {
+      if (!navigator.geolocation) {
+        alert("Geolocation not supported by this browser.");
+        weatherBox.textContent = "No geolocation";
+        return;
+      }
+      watchId = navigator.geolocation.watchPosition(onLocation, onLocationError, {
+        enableHighAccuracy: true,
+        maximumAge: 2000,
+        timeout: 10000,
+      });
+    }
+    startTracking();
+
+    function rotateUserArrow(marker, deg) {
+      if (!marker) return;
+      const el = marker.getElement();
+      if (!el) return;
+      const img = el.querySelector("img");
+      if (!img) return;
+      img.style.transform = `rotate(${deg}deg)`;
+    }
+
+    // === UI buttons ===
+    document.getElementById("followBtn").onclick = () => {
+      follow = !follow;
+      document.getElementById("followBtn").textContent = "Follow: " + (follow ? "On" : "Off");
+      if (follow && userMarker) map.setView(userMarker.getLatLng(), 13);
+    };
+
+    document.getElementById("toggleTrails").onclick = () => {
+      if (trailsLayer) {
+        if (map.hasLayer(trailsLayer)) {
+          map.removeLayer(trailsLayer);
+          document.getElementById("toggleTrails").textContent = "Trails: Off";
+        } else {
+          map.addLayer(trailsLayer);
+          document.getElementById("toggleTrails").textContent = "Trails: On";
+        }
+      }
+    };
+
+    document.getElementById("togglePoints").onclick = () => {
+      if (pointsLayer) {
+        if (map.hasLayer(pointsLayer)) {
+          map.removeLayer(pointsLayer);
+          document.getElementById("togglePoints").textContent = "Points: Off";
+        } else {
+          map.addLayer(pointsLayer);
+          document.getElementById("togglePoints").textContent = "Points: On";
+        }
+      }
+    };
+
+    // === Color menu toggle ===
+    const colorMenuToggle = document.getElementById('colorMenuToggle');
+    const colorMenu = document.getElementById('colorMenu');
+    const pointsColorInput = document.getElementById('pointsColor');
+    const arrowFillInput = document.getElementById('arrowFillColor');
+    const arrowStrokeInput = document.getElementById('arrowStrokeColor');
+
+    colorMenuToggle.addEventListener('click', () => {
+      if (colorMenu.style.display === 'none' || colorMenu.style.display === '') {
+        colorMenu.style.display = 'block';
+      } else {
+        colorMenu.style.display = 'none';
+      }
+    });
+
+    // Update points color live
+    pointsColorInput.addEventListener('input', () => {
+      pointsColor = pointsColorInput.value;
+      if (pointsLayer) {
+        pointsLayer.eachLayer(layer => {
+          layer.setStyle({ fillColor: pointsColor });
+        });
+      }
+    });
+
+    // Update arrow colors live
+    function updateArrowIcon() {
+      arrowFillColor = arrowFillInput.value;
+      arrowStrokeColor = arrowStrokeInput.value;
+
+      arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor);
+
+      arrowIcon = L.divIcon({
+        className: "user-arrow-icon",
+        html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:36px;height:36px;transform: rotate(0deg);">`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18],
+      });
+
+      if (userMarker) {
+        userMarker.setIcon(arrowIcon);
+      }
+    }
+
+    arrowFillInput.addEventListener('input', updateArrowIcon);
+    arrowStrokeInput.addEventListener('input', updateArrowIcon);
+  </script>
+</body>
+</html>
