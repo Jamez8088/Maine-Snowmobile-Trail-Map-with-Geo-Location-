@@ -1,14 +1,24 @@
 # Maine Snowmobile Trail Map with Geo-Location
 Using the map layer publically available on Arcgis.com, then places a simple GPS locator icon on the map showing where you are with the majority of snowmobile trails in Maine, easy as that. 
 This is in beta! I'm still working on adding some features and removing bugs, so expect some down time here and there.  
+# Click the link below! Dont forget to enable location when prompted!!
+Just go to https://jamez8088.github.io/Maine-Snowmobile-Trail-Map-with-Geo-Location-/index.html
+[Features:]
+- Realtime directional GPS tracking.
+- Up-to-date trail map.
+- Realtime weather forecasts and conditions.
+- Offline map persistence.
+- Current Points of Interest, like gas stations and lodging.
+- GPS Route Planning (Planned)
+- GPS Speedometer (Planned)
+
+# Disclaimer and Patch Notes
+
 - I do not own the rights to any of these map layers, all map layers are from ArcGIS which can be found here: 
 
 Points: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois/explore?layer=0&location=44.839697%2C-69.199815%2C12.75
 
 Trails: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois/explore?layer=2&location=45.208741%2C-68.925947%2C7.69
-
-# Click the link below! Dont forget to enable location when prompted!!
-Just go to https://jamez8088.github.io/Maine-Snowmobile-Trail-Map-with-Geo-Location-/index.html
 
 # Patch Notes:
 [8/9/2025 - Ver. 0.3]
