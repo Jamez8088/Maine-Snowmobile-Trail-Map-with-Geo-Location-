@@ -22,6 +22,8 @@ Just go to https://jamez8088.github.io/Maine-Snowmobile-Trail-Map-with-Geo-Locat
   - Added customizable color selections for both the POI's and user arrow.
   - POI's are now semi-transparent circles.
   - POI's can also now be toggled on/off.
+
+
  
 [8/8/2025 - Ver. 0.2] 
   - Changed user icon to a functional arrow.
