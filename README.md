@@ -5,7 +5,8 @@ This is in beta! I'm still working on adding some features and removing bugs, so
 Just go to https://jamez8088.github.io/Maine-Snowmobile-Trail-Map-with-Geo-Location-/index.html
 
 [Features:]
-- Realtime directional GPS tracking.
+- Realtime directional GPS tracking with Follow.
+- Color-Customizable user and POI icons.
 - Up-to-date trail map.
 - Realtime weather forecasts and conditions.
 - Offline map persistence.
