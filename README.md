@@ -10,7 +10,19 @@ Trails: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois
 # Click the link below! Dont forget to enable location when prompted!!
 Just go to https://jamez8088.github.io/Maine-Snowmobile-Trail-Map-with-Geo-Location-/index.html
 
-# Patch Notes: 
+# Patch Notes:
+[8/9/2025 - Ver. 0.3]
+  - Updated the map version from 2015 to 2017.
+      - A much more recent and dense version of the map, still not final but better.
+      - [New version was extracted using raw JSON data from https://www.arcgis.com/sharing/rest/content/items/eafcdafee1134205b8b4abf10658d4db/data?f=json]
+  - Added weather forcast system based on current ZIP code:
+      - Provides realtime temperature in farenheit.
+      - Provides current conditions.
+      - Provides +12hr realtime forecasts.
+  - Added customizable color selections for both the POI's and user arrow.
+  - POI's are now semi-transparent circles.
+  - POI's can also now be toggled on/off.
+ 
 [8/8/2025 - Ver. 0.2] 
   - Changed user icon to a functional arrow.
   - Fixed CSS error causing overlapping buttons.
