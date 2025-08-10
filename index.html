@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Maine ITS GPS Map — with Recenter</title>
+<title>Maine ITS GPS Map — with Recenter & Settings</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -87,10 +87,27 @@
   /* Arrow rotation smooth */
   .user-arrow-icon img { transition: transform 200ms linear; display:block; }
 
+  /* Settings button */
+  #settingsBtn {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 1100;
+    background: white;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    font-family: system-ui, sans-serif;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    user-select: none;
+  }
+
   /* Ensure interactive elements have some touch hit area */
   @media (pointer: coarse) {
     .leaflet-control-locate { padding: 10px 12px; min-width: 140px; }
     #colorMenuToggle { padding: 10px 14px; }
+    #settingsBtn { padding: 10px 14px; }
   }
 </style>
 </head>
@@ -122,6 +139,8 @@
     <label for="arrowStrokeColor">Arrow Stroke Color</label>
     <input type="color" id="arrowStrokeColor" value="#003d8a" title="Arrow stroke color" />
   </div>
+
+  <button id="settingsBtn">Hide Settings</button>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -208,7 +227,7 @@
         .then(data => {
           pointsLayer = L.geoJSON(data, {
             pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-              radius: 12,             // larger for mobile
+              radius: 12,
               fillColor: pointsColor,
               color: arrowStrokeColor,
               weight: 1,
@@ -223,14 +242,12 @@
             }
           }).addTo(map);
 
-          // ensure points are on top (bring to front)
           if (pointsLayer.bringToFront) pointsLayer.bringToFront();
 
           return pointsLayer;
         });
     }
 
-    // Kickoff loading
     loadTrails().then(() => loadPoints())
       .catch(err => { console.error("Layer load error:", err); alert("Failed to load layers (see console)."); });
 
@@ -260,7 +277,6 @@
         userMarker.setLatLng([lat, lon]);
         accuracyCircle.setLatLng([lat, lon]).setRadius(accuracy);
       }
-      // keep heading if provided, else keep previous
       if (heading !== null && !isNaN(heading)) lastHeading = heading;
       rotateUserArrow(userMarker, lastHeading || 0);
     }
@@ -289,7 +305,7 @@
       }
     }
 
-    // --- NOAA Weather (same as before) ---
+    // --- NOAA Weather ---
     const weatherBox = document.getElementById("weatherBox");
     let lastWeatherPos = null;
     const WEATHER_DISTANCE_THRESHOLD_M = 500;
@@ -376,12 +392,8 @@
 
       setUserMarker(lat, lon, accuracy, deviceHeading);
 
-      // if heading not available, compute from last position movement
-      // store lastPos for this if you'd like more advanced smoothing (omitted for brevity)
-
       maybeFetchWeather(lat, lon);
 
-      // If following, use followZoom (no hard-coded zoom)
       if (follow) {
         map.setView([lat, lon], followZoom, { animate: true });
       }
@@ -409,129 +421,130 @@
 
     // --- UI buttons logic ---
     const followBtn = document.getElementById("followBtn");
-    const followZoomUI = document.getElementById("followZoomUI");
     const followZoomSlider = document.getElementById("followZoomSlider");
+    const followZoomUI = document.getElementById("followZoomUI");
     const recenterBtn = document.getElementById("recenterBtn");
+    const toggleTrailsBtn = document.getElementById("toggleTrails");
+    const togglePointsBtn = document.getElementById("togglePoints");
+    const colorMenuToggle = document.getElementById("colorMenuToggle");
+    const colorMenu = document.getElementById("colorMenu");
+    const pointsColorInput = document.getElementById("pointsColor");
+    const arrowFillColorInput = document.getElementById("arrowFillColor");
+    const arrowStrokeColorInput = document.getElementById("arrowStrokeColor");
+    const settingsBtn = document.getElementById('settingsBtn');
 
     followBtn.onclick = () => {
       follow = !follow;
-      followBtn.textContent = "Follow: " + (follow ? "On" : "Off");
-
-      if (follow) {
-        // set followZoom to current zoom when enabling so it won't jump
-        followZoom = Math.round(map.getZoom());
-        followZoomSlider.value = followZoom;
-        followZoomUI.style.display = "block";
-        if (userMarker) map.setView(userMarker.getLatLng(), followZoom);
-      } else {
-        followZoomUI.style.display = "none";
+      followBtn.textContent = `Follow: ${follow ? "On" : "Off"}`;
+      followZoomUI.style.display = follow ? "block" : "none";
+      if (follow && userMarker) {
+        const latlng = userMarker.getLatLng();
+        map.setView(latlng, followZoom, { animate: true });
       }
     };
 
-    // Recenter button: snap map to user position without toggling follow
-    recenterBtn.onclick = () => {
-      if (!userMarker) {
-        alert("No user location yet.");
-        return;
-      }
-      // preserve zoom unless follow is active (then use followZoom)
-      const zoomToUse = follow ? followZoom : map.getZoom();
-      map.setView(userMarker.getLatLng(), zoomToUse, { animate: true });
-    };
-
-    followZoomSlider.addEventListener('input', (e) => {
-      followZoom = Number(e.target.value);
+    followZoomSlider.oninput = () => {
+      followZoom = Number(followZoomSlider.value);
       if (follow && userMarker) {
         map.setView(userMarker.getLatLng(), followZoom);
       }
-    });
+    };
 
-    document.getElementById("toggleTrails").onclick = () => {
-      if (trailsLayer) {
-        if (map.hasLayer(trailsLayer)) {
-          map.removeLayer(trailsLayer);
-          document.getElementById("toggleTrails").textContent = "Trails: Off";
-        } else {
-          map.addLayer(trailsLayer);
-          document.getElementById("toggleTrails").textContent = "Trails: On";
-          if (pointsLayer && pointsLayer.bringToFront) pointsLayer.bringToFront();
-        }
+    toggleTrailsBtn.onclick = () => {
+      if (!trailsLayer) return;
+      if (map.hasLayer(trailsLayer)) {
+        map.removeLayer(trailsLayer);
+        toggleTrailsBtn.textContent = "Trails: Off";
+      } else {
+        map.addLayer(trailsLayer);
+        toggleTrailsBtn.textContent = "Trails: On";
       }
     };
 
-    document.getElementById("togglePoints").onclick = () => {
-      if (pointsLayer) {
-        if (map.hasLayer(pointsLayer)) {
-          map.removeLayer(pointsLayer);
-          document.getElementById("togglePoints").textContent = "Points: Off";
-        } else {
-          map.addLayer(pointsLayer);
-          document.getElementById("togglePoints").textContent = "Points: On";
-          if (pointsLayer.bringToFront) pointsLayer.bringToFront();
-        }
+    togglePointsBtn.onclick = () => {
+      if (!pointsLayer) return;
+      if (map.hasLayer(pointsLayer)) {
+        map.removeLayer(pointsLayer);
+        togglePointsBtn.textContent = "Points: Off";
+      } else {
+        map.addLayer(pointsLayer);
+        togglePointsBtn.textContent = "Points: On";
       }
     };
 
-    // --- Color menu logic ---
-    const colorMenuToggle = document.getElementById('colorMenuToggle');
-    const colorMenu = document.getElementById('colorMenu');
-    const pointsColorInput = document.getElementById('pointsColor');
-    const arrowFillInput = document.getElementById('arrowFillColor');
-    const arrowStrokeInput = document.getElementById('arrowStrokeColor');
+    colorMenuToggle.onclick = () => {
+      if (colorMenu.style.display === "none" || colorMenu.style.display === "") {
+        colorMenu.style.display = "block";
+      } else {
+        colorMenu.style.display = "none";
+      }
+    };
 
-    colorMenuToggle.addEventListener('click', () => {
-      colorMenu.style.display = (colorMenu.style.display === 'block') ? 'none' : 'block';
-    });
-
-    pointsColorInput.addEventListener('input', () => {
+    function updateColors() {
       pointsColor = pointsColorInput.value;
+      arrowFillColor = arrowFillColorInput.value;
+      arrowStrokeColor = arrowStrokeColorInput.value;
+
       if (pointsLayer) {
         pointsLayer.eachLayer(layer => {
-          if (layer.setStyle) layer.setStyle({ fillColor: pointsColor });
+          if (layer.setStyle) {
+            layer.setStyle({
+              fillColor: pointsColor,
+              color: arrowStrokeColor,
+            });
+          }
         });
       }
-    });
-
-    arrowFillInput.addEventListener('input', () => {
-      arrowFillColor = arrowFillInput.value;
       updateArrowIcon();
-    });
-    arrowStrokeInput.addEventListener('input', () => {
-      arrowStrokeColor = arrowStrokeInput.value;
-      updateArrowIcon();
-    });
+    }
 
-    // --- Helpers ---
+    pointsColorInput.addEventListener("input", updateColors);
+    arrowFillColorInput.addEventListener("input", updateColors);
+    arrowStrokeColorInput.addEventListener("input", updateColors);
+
+    // Distance calculation utility
     function distanceMeters(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const toRad = (x) => (x * Math.PI) / 180;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) *
-          Math.cos(toRad(lat2)) *
-          Math.sin(dLon / 2) *
-          Math.sin(dLon / 2);
+      const R = 6371e3;
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
       return R * c;
     }
 
-    function bearingDegrees(lat1, lon1, lat2, lon2) {
-      const toRad = (deg) => (deg * Math.PI) / 180;
-      const toDeg = (rad) => (rad * 180) / Math.PI;
-      const φ1 = toRad(lat1);
-      const φ2 = toRad(lat2);
-      const λ1 = toRad(lon1);
-      const λ2 = toRad(lon2);
-      const y = Math.sin(λ2 - λ1) * Math.cos(φ2);
-      const x =
-        Math.cos(φ1) * Math.sin(φ2) -
-        Math.sin(φ1) * Math.cos(φ2) * Math.cos(λ2 - λ1);
-      let θ = toDeg(Math.atan2(y, x));
-      θ = (θ + 360) % 360;
-      return θ;
-    }
+    // SETTINGS button logic with toggle text
+    const controlsToToggle = [
+      document.querySelector('.top-controls'),
+      colorMenuToggle,
+      colorMenu,
+      followZoomUI
+    ];
+
+    let controlsHidden = false;
+    settingsBtn.textContent = "Hide Settings";
+
+    settingsBtn.addEventListener('click', () => {
+      controlsHidden = !controlsHidden;
+      controlsToToggle.forEach(el => {
+        if (!el) return;
+        if (el === followZoomUI) {
+          el.style.display = (!controlsHidden && follow) ? "block" : "none";
+        } else if (el === colorMenu) {
+          el.style.display = controlsHidden ? "none" : (colorMenu.style.display || "none");
+        } else if (el === colorMenuToggle) {
+          el.style.display = controlsHidden ? "none" : "block";
+        } else {
+          el.style.display = controlsHidden ? "none" : "flex";
+        }
+      });
+      settingsBtn.textContent = controlsHidden ? "Show Settings" : "Hide Settings";
+    });
   </script>
 </body>
 </html>
