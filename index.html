@@ -87,15 +87,32 @@
   /* Arrow rotation smooth */
   .user-arrow-icon img { transition: transform 200ms linear; display:block; }
 
+  /* Settings button */
+  #settingsBtn {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 1100;
+    background: white;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    font-family: system-ui, sans-serif;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    user-select: none;
+  }
+
   /* Ensure interactive elements have some touch hit area */
   @media (pointer: coarse) {
     .leaflet-control-locate { padding: 10px 12px; min-width: 140px; }
     #colorMenuToggle { padding: 10px 14px; }
+    #settingsBtn { padding: 10px 14px; }
   }
 </style>
 </head>
 <body>
-  <div id="map"></div>
+    <div id="map"></div>
 
   <div class="top-controls">
     <button id="followBtn" class="leaflet-control-locate">Follow: Off</button>
@@ -122,6 +139,8 @@
     <label for="arrowStrokeColor">Arrow Stroke Color</label>
     <input type="color" id="arrowStrokeColor" value="#003d8a" title="Arrow stroke color" />
   </div>
+
+  <button id="settingsBtn">Settings</button>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -536,6 +555,35 @@
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
+const settingsBtn = document.getElementById('settingsBtn');
+
+    const controlsToToggle = [
+      document.querySelector('.top-controls'),
+      colorMenuToggle,
+      colorMenu,
+      followZoomUI
+    ];
+
+    let controlsHidden = false;
+
+settingsBtn.textContent = "Hide Settings"; // initial state
+
+settingsBtn.addEventListener('click', () => {
+  controlsHidden = !controlsHidden;
+  controlsToToggle.forEach(el => {
+    if (!el) return;
+    if (el === followZoomUI) {
+      el.style.display = (!controlsHidden && follow) ? "block" : "none";
+    } else if (el === colorMenu) {
+      el.style.display = controlsHidden ? "none" : (colorMenu.style.display || "none");
+    } else if (el === colorMenuToggle) {
+      el.style.display = controlsHidden ? "none" : "block";
+    } else {
+      el.style.display = controlsHidden ? "none" : "flex";
+    }
+  });
+  settingsBtn.textContent = controlsHidden ? "Show Settings" : "Hide Settings";
+});
 
   </script>
 </body>
