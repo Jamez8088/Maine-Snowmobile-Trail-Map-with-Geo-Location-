@@ -10,7 +10,7 @@ Just go to https://jamez8088.github.io/Maine-Snowmobile-Trail-Map-with-Geo-Locat
 - Up-to-date trail map.
 - Realtime weather forecasts and conditions.
 - Offline map persistence.
-- Current Points of Interest, like gas stations and lodging.
+- Current Points of Interest, like gas stations and lodging. (More to come)
 - GPS Route Planning (Planned)
 - GPS Speedometer (Planned)
 
