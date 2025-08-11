@@ -23,6 +23,13 @@ Points: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois
 Trails: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois/explore?layer=2&location=45.208741%2C-68.925947%2C7.69
 
 # Patch Notes:
+[8/11/2025 - Ver. 0.3.4]
+- Added Size Settings button to main UI.
+     - Size sliders for:
+        - Arrow Size.
+        - Points Size.
+        - Trail Size (visual width).
+
 [8/10/2025 - Ver. 0.3.3]
 - Manually traced some new/club trails, highlighted in blue. More will be coming soon.
 - Shrunk down all button sizes.
