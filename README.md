@@ -33,7 +33,6 @@ Trails: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois
 [8/9/2025 - Ver. 0.3]
   - Updated the map version from 2015 to 2017.
       - A much more recent and dense version of the map, still not final but better.
-      - [New version was extracted using raw JSON data from https://www.arcgis.com/sharing/rest/content/items/eafcdafee1134205b8b4abf10658d4db/data?f=json]
   - Added weather forcast system based on current ZIP code:
       - Provides realtime temperature in farenheit.
       - Provides current conditions.
