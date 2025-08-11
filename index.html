@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>MEITSMAP0.3.3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  html, body, #map { height: 100%; margin: 0; }
+  .top-controls {
+    position: absolute;
+    top: 80px;
+    left: 5px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+  }
+  .leaflet-control-locate {
+    background: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: system-ui, sans-serif;
+    margin-bottom: 6px;
+    min-width: 80px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .weather-box {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.95);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    max-width: 180px;
+    line-height: 1.3;
+  }
+  .follow-zoom-container {
+    margin-top: 4px;
+    background: rgba(255,255,255,0.95);
+    padding: 6px 8px;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .follow-zoom-container label { font-size: 12px; display:block; margin-bottom:4px; font-weight:600;}
+  .follow-zoom-container input[type="range"] { width: 160px; }
+
+  /* Color menu styles */
+  #colorMenuToggle {
+    position: absolute;
+    top: 100px;
+    right: 8px;
+    z-index: 1001;
+    background: white;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: system-ui, sans-serif;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    user-select: none;
+  }
+  #colorMenu {
+    position: absolute;
+    top: 140px;
+    right: 8px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.95);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    max-width: 180px;
+    line-height: 1.3;
+    display: none;
+  }
+  #colorMenu label { display:block; margin:8px 0 4px; }
+  #colorMenu input[type="color"] { width:100%; height:34px; border:none; cursor:pointer; }
+
+  /* Arrow rotation smooth */
+  .user-arrow-icon img { transition: transform 200ms linear; display:block; }
+
+  /* Ensure interactive elements have some touch hit area */
+  @media (pointer: coarse) {
+    .leaflet-control-locate { padding: 10px 12px; min-width: 140px; }
+    #colorMenuToggle { padding: 10px 14px; }
+  }
+</style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="top-controls">
+    <button id="followBtn" class="leaflet-control-locate">Follow: Off</button>
+    <div id="followZoomUI" class="follow-zoom-container" style="display:none;">
+      <label for="followZoomSlider">Follow Zoom</label>
+      <input id="followZoomSlider" type="range" min="5" max="18" step="1" value="14">
+    </div>
+
+    <button id="recenterBtn" class="leaflet-control-locate">Recenter</button>
+    <button id="toggleTrails" class="leaflet-control-locate">Trails: On</button>
+    <button id="togglePoints" class="leaflet-control-locate">Points: On</button>
+  </div>
+
+  <div class="weather-box" id="weatherBox">Loading weather…</div>
+
+  <button id="colorMenuToggle">Customize Colors</button>
+  <div id="colorMenu">
+    <label for="pointsColor">Points Color</label>
+    <input type="color" id="pointsColor" value="#0078ff" title="Points fill color" />
+
+    <label for="arrowFillColor">Arrow Fill Color</label>
+    <input type="color" id="arrowFillColor" value="#0078ff" title="Arrow fill color" />
+
+    <label for="arrowStrokeColor">Arrow Stroke Color</label>
+    <input type="color" id="arrowStrokeColor" value="#003d8a" title="Arrow stroke color" />
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // INITIAL MAP
+    const INITIAL_CENTER = [45.0, -69.0];
+    const INITIAL_ZOOM = 7;
+    const map = L.map("map", { center: INITIAL_CENTER, zoom: INITIAL_ZOOM });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    // Global layers & state
+    let trailsLayer = null;
+    let pointsLayer = null;
+    let reroutesLayer = null;
+
+    // Colors (defaults)
+    let pointsColor = "#0078ff";
+    let arrowFillColor = "#0078ff";
+    let arrowStrokeColor = "#003d8a";
+
+    // Follow state
+    let follow = false;
+    let followZoom = 14;
+    let lastHeading = 0; // preserve last heading when swapping icons
+    let userMarker = null;
+    let accuracyCircle = null;
+
+    // Helper: escape HTML for popups
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // --- Load layers (trails then reroutes then points to ensure points on top) ---
+    function loadTrails() {
+      return fetch('primary_polylines.geojson')
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to fetch polylines");
+          return res.json();
+        })
+        .then(data => {
+          trailsLayer = L.geoJSON(data, {
+            style: (feature) => ({
+              color:
+                feature.properties &&
+                (feature.properties.type === "connector" ||
+                  feature.properties.trail_type === "connector")
+                  ? "#2ecc71"
+                  : "#e74c3c",
+              weight: 3,
+              opacity: 0.95,
+            }),
+            onEachFeature: (feature, layer) => {
+              const props = feature.properties || {};
+              const trailName = props.name || props.trail_name || props.NAME || props.Title || props.Name || "Trail";
+              const trailType = props.type || props.trail_type || props.class || "";
+              let popup = `<strong>${escapeHtml(trailName)}</strong><br/>`;
+              if (trailType) popup += `Type: ${escapeHtml(trailType)}<br/>`;
+              if (props.club) popup += `Club: ${escapeHtml(props.club)}<br/>`;
+              if (props.junction) popup += `Junction: ${escapeHtml(props.junction)}<br/>`;
+              ["surface", "difficulty", "length"].forEach((k) => {
+                if (props[k]) popup += `${escapeHtml(k)}: ${escapeHtml(String(props[k]))}<br/>`;
+              });
+              layer.bindPopup(popup);
+            },
+          }).addTo(map);
+          return trailsLayer;
+        });
+    }
+
+    function loadReroutes() {
+      return fetch('Extra.geojson')
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to fetch Extra Trails GEOJSON");
+          return res.json();
+        })
+        .then(data => {
+          reroutesLayer = L.geoJSON(data, {
+            style: (feature) => ({
+              color: "#3498db",
+              weight: 3,
+              opacity: 0.95,
+            }),
+            onEachFeature: (feature, layer) => {
+              const props = feature.properties || {};
+              const trailName = props.name || props.trail_name || props.NAME || props.Title || props.Name || "Trail";
+              layer.bindPopup(`<strong>${escapeHtml(trailName)}</strong>`);
+            },
+          }).addTo(map);
+          return reroutesLayer;
+        });
+    }
+
+    function loadPoints() {
+      return fetch('points.geojson')
+        .then(res => {
+          if (!res.ok) throw new Error("Failed to fetch points");
+          return res.json();
+        })
+        .then(data => {
+          pointsLayer = L.geoJSON(data, {
+            pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+              radius: 12,             // larger for mobile
+              fillColor: pointsColor,
+              color: arrowStrokeColor,
+              weight: 1,
+              opacity: 1,
+              fillOpacity: 0.95,
+            }),
+            onEachFeature: (feature, layer) => {
+              const props = feature.properties || props.Name || {};
+              if (props.Name) {
+                layer.bindPopup(`<strong>${escapeHtml(props.Name)}</strong>`);
+              }
+            }
+          }).addTo(map);
+
+          // ensure points are on top (bring to front)
+          if (pointsLayer.bringToFront) pointsLayer.bringToFront();
+
+          return pointsLayer;
+        });
+    }
+
+    // Kickoff loading
+    Promise.all([loadTrails(), loadReroutes(), loadPoints()])
+      .catch(err => { console.error("Layer load error:", err); alert("Failed to load layers (see console)."); });
+
+    // --- Arrow icon handling ---
+    function createArrowSvg(fill, stroke) {
+      return encodeURIComponent(
+        `<svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2 L20 22 L12 17 L4 22 Z" fill="${fill}" stroke="${stroke}" stroke-width="0.7"/>
+        </svg>`
+      );
+    }
+
+    let arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor);
+    let arrowIcon = L.divIcon({
+      className: "user-arrow-icon",
+      html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:36px;height:36px;transform: rotate(0deg);">`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -18],
+    });
+
+    function setUserMarker(lat, lon, accuracy, heading) {
+      if (!userMarker) {
+        userMarker = L.marker([lat, lon], { icon: arrowIcon, title: "Your location" }).addTo(map);
+        accuracyCircle = L.circle([lat, lon], { radius: accuracy, opacity: 0.25, fillOpacity: 0.07 }).addTo(map);
+      } else {
+        userMarker.setLatLng([lat, lon]);
+        accuracyCircle.setLatLng([lat, lon]).setRadius(accuracy);
+      }
+      // keep heading if provided, else keep previous
+      if (heading !== null && !isNaN(heading)) lastHeading = heading;
+      rotateUserArrow(userMarker, lastHeading || 0);
+    }
+
+    function rotateUserArrow(marker, deg) {
+      if (!marker) return;
+      const el = marker.getElement();
+      if (!el) return;
+      const img = el.querySelector("img");
+      if (!img) return;
+      img.style.transform = `rotate(${deg}deg)`;
+    }
+
+    function updateArrowIcon() {
+      arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor);
+      arrowIcon = L.divIcon({
+        className: "user-arrow-icon",
+        html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:36px;height:36px;transform: rotate(0deg);">`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18],
+      });
+      if (userMarker) {
+        userMarker.setIcon(arrowIcon);
+        rotateUserArrow(userMarker, lastHeading || 0);
+      }
+    }
+
+    // --- NOAA Weather (same as before) ---
+    const weatherBox = document.getElementById("weatherBox");
+    let lastWeatherPos = null;
+    const WEATHER_DISTANCE_THRESHOLD_M = 500;
+
+    async function fetchNOAAWeather(lat, lon) {
+      try {
+        const pointsRes = await fetch(`https://api.weather.gov/points/${lat},${lon}`);
+        if (!pointsRes.ok) throw new Error("Failed to get points data");
+        const pointsData = await pointsRes.json();
+
+        const stationsUrl = pointsData.properties.observationStations;
+        const forecastUrl = pointsData.properties.forecast;
+
+        const stationsRes = await fetch(stationsUrl);
+        if (!stationsRes.ok) throw new Error("Failed to get stations");
+        const stationsData = await stationsRes.json();
+        const stations = stationsData.features;
+        if (!stations || stations.length === 0) throw new Error("No observation stations found");
+
+        let currentObs = null;
+        for (const station of stations) {
+          const obsUrl = station.id + "/observations/latest";
+          const obsRes = await fetch(obsUrl);
+          if (!obsRes.ok) continue;
+          const obsData = await obsRes.json();
+          if (obsData.properties && obsData.properties.temperature && obsData.properties.textDescription) {
+            currentObs = obsData.properties;
+            break;
+          }
+        }
+        if (!currentObs) throw new Error("No valid current observations found");
+
+        const forecastRes = await fetch(forecastUrl);
+        if (!forecastRes.ok) throw new Error("Failed to get forecast");
+        const forecastData = await forecastRes.json();
+
+        const periods = forecastData.properties.periods || [];
+        const now = new Date();
+        let shortTermForecast = "";
+        for (const p of periods) {
+          const start = new Date(p.startTime);
+          const end = new Date(p.endTime);
+          if (now >= start && now < end) {
+            shortTermForecast = p.shortForecast;
+            break;
+          }
+        }
+        if (!shortTermForecast && periods.length > 0) shortTermForecast = periods[0].shortForecast;
+
+        const tempC = currentObs.temperature.value;
+        const tempF = tempC !== null ? Math.round((tempC * 9) / 5 + 32) : "N/A";
+        const conditions = currentObs.textDescription;
+
+        weatherBox.innerHTML = `
+          <div><strong>Current Temp:</strong> ${tempF} °F</div>
+          <div><strong>Conditions:</strong> ${escapeHtml(conditions)}</div>
+          <div class="weather-forecast"><strong>Forecast:</strong> ${escapeHtml(shortTermForecast)}</div>
+        `;
+      } catch (err) {
+        console.error("NOAA weather error:", err);
+        weatherBox.textContent = "Weather unavailable";
+      }
+    }
+
+    function maybeFetchWeather(lat, lon) {
+      if (!lastWeatherPos) {
+        lastWeatherPos = { lat, lon };
+        fetchNOAAWeather(lat, lon);
+        return;
+      }
+      if (distanceMeters(lastWeatherPos.lat, lastWeatherPos.lon, lat, lon) > WEATHER_DISTANCE_THRESHOLD_M) {
+        lastWeatherPos = { lat, lon };
+        fetchNOAAWeather(lat, lon);
+      }
+    }
+
+    // --- Geolocation handling ---
+    let watchId = null;
+    function onLocation(position) {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      const accuracy = position.coords.accuracy || 0;
+      const deviceHeading = position.coords.heading;
+
+      setUserMarker(lat, lon, accuracy, deviceHeading);
+
+      maybeFetchWeather(lat, lon);
+
+      if (follow) {
+        map.setView([lat, lon], followZoom, { animate: true });
+      }
+    }
+
+    function onLocationError(err) {
+      console.warn("Geolocation error", err);
+      if (err && err.code === 1) alert("Location permission denied. Allow location for tracking.");
+      else weatherBox.textContent = "Location unavailable";
+    }
+
+    function startTracking() {
+      if (!navigator.geolocation) {
+        alert("Geolocation not supported by this browser.");
+        weatherBox.textContent = "No geolocation";
+        return;
+      }
+      watchId = navigator.geolocation.watchPosition(onLocation, onLocationError, {
+        enableHighAccuracy: true,
+        maximumAge: 2000,
+        timeout: 10000,
+      });
+    }
+    startTracking();
+
+    // --- UI buttons logic ---
+    const followBtn = document.getElementById("followBtn");
+    const followZoomUI = document.getElementById("followZoomUI");
+    const followZoomSlider = document.getElementById("followZoomSlider");
+    const recenterBtn = document.getElementById("recenterBtn");
+
+    followBtn.onclick = () => {
+      follow = !follow;
+      followBtn.textContent = follow ? "Follow: On" : "Follow: Off";
+      followZoomUI.style.display = follow ? "block" : "none";
+      if (follow && userMarker) {
+        map.setView(userMarker.getLatLng(), followZoom, { animate: true });
+      }
+    };
+
+    followZoomSlider.oninput = () => {
+      followZoom = +followZoomSlider.value;
+      if (follow && userMarker) {
+        map.setView(userMarker.getLatLng(), followZoom, { animate: true });
+      }
+    };
+
+    recenterBtn.onclick = () => {
+      if (userMarker) {
+        map.setView(userMarker.getLatLng(), map.getZoom(), { animate: true });
+      }
+    };
+
+    // Trails and Points toggle buttons
+    const toggleTrailsBtn = document.getElementById("toggleTrails");
+    const togglePointsBtn = document.getElementById("togglePoints");
+
+    toggleTrailsBtn.onclick = () => {
+      if (!trailsLayer) return;
+      if (map.hasLayer(trailsLayer)) {
+        map.removeLayer(trailsLayer);
+        toggleTrailsBtn.textContent = "Trails: Off";
+      } else {
+        map.addLayer(trailsLayer);
+        toggleTrailsBtn.textContent = "Trails: On";
+      }
+    };
+
+    togglePointsBtn.onclick = () => {
+      if (!pointsLayer) return;
+      if (map.hasLayer(pointsLayer)) {
+        map.removeLayer(pointsLayer);
+        togglePointsBtn.textContent = "Points: Off";
+      } else {
+        map.addLayer(pointsLayer);
+        togglePointsBtn.textContent = "Points: On";
+      }
+    };
+
+    // Note: No toggle button for reroutes; always visible.
+
+    // Color menu toggle
+    const colorMenuToggle = document.getElementById("colorMenuToggle");
+    const colorMenu = document.getElementById("colorMenu");
+    colorMenuToggle.onclick = () => {
+      if (colorMenu.style.display === "none" || colorMenu.style.display === "") {
+        colorMenu.style.display = "block";
+      } else {
+        colorMenu.style.display = "none";
+      }
+    };
+
+    // Color pickers
+    const pointsColorPicker = document.getElementById("pointsColor");
+    const arrowFillColorPicker = document.getElementById("arrowFillColor");
+    const arrowStrokeColorPicker = document.getElementById("arrowStrokeColor");
+
+    pointsColorPicker.oninput = () => {
+      pointsColor = pointsColorPicker.value;
+      if (pointsLayer) {
+        pointsLayer.setStyle({
+          fillColor: pointsColor,
+          color: arrowStrokeColor,
+        });
+      }
+    };
+
+    arrowFillColorPicker.oninput = () => {
+      arrowFillColor = arrowFillColorPicker.value;
+      updateArrowIcon();
+    };
+
+    arrowStrokeColorPicker.oninput = () => {
+      arrowStrokeColor = arrowStrokeColorPicker.value;
+      if (pointsLayer) {
+        pointsLayer.setStyle({
+          color: arrowStrokeColor,
+        });
+      }
+      updateArrowIcon();
+    };
+
+    // Distance function (Haversine in meters)
+    function distanceMeters(lat1, lon1, lat2, lon2) {
+      function toRad(x) { return x * Math.PI / 180; }
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+  </script>
+</body>
+</html>
