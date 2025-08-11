@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>MEITSMAP0.3.3</title>
+<title>MEITSMAP0.3.4</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -51,7 +51,7 @@
   .follow-zoom-container label { font-size: 12px; display:block; margin-bottom:4px; font-weight:600;}
   .follow-zoom-container input[type="range"] { width: 160px; }
 
-  /* Color menu styles */
+  /* Color + Size menu styles (shared) */
   #colorMenuToggle {
     position: absolute;
     top: 100px;
@@ -66,7 +66,7 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     user-select: none;
   }
-  #colorMenu {
+  #colorMenu, #sizeMenu {
     position: absolute;
     top: 140px;
     right: 8px;
@@ -77,12 +77,13 @@
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     font-size: 14px;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    max-width: 180px;
+    max-width: 220px;
     line-height: 1.3;
     display: none;
   }
-  #colorMenu label { display:block; margin:8px 0 4px; }
+  #colorMenu label, #sizeMenu label { display:block; margin:8px 0 4px; }
   #colorMenu input[type="color"] { width:100%; height:34px; border:none; cursor:pointer; }
+  #sizeMenu input[type="range"] { width:100%; }
 
   /* Arrow rotation smooth */
   .user-arrow-icon img { transition: transform 200ms linear; display:block; }
@@ -103,11 +104,27 @@
     user-select: none;
   }
 
+  /* Size Settings button (placed above settings button) */
+  #sizeMenuToggle {
+    position: fixed;
+    bottom: 60px;
+    right: 16px;
+    z-index: 1100;
+    background: white;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-weight: 600;
+    font-family: system-ui, sans-serif;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    cursor: pointer;
+    user-select: none;
+  }
+
   /* Ensure interactive elements have some touch hit area */
   @media (pointer: coarse) {
     .leaflet-control-locate { padding: 10px 12px; min-width: 140px; }
     #colorMenuToggle { padding: 10px 14px; }
-    #settingsBtn { padding: 10px 14px; }
+    #settingsBtn, #sizeMenuToggle { padding: 10px 14px; }
   }
 </style>
 </head>
@@ -140,6 +157,20 @@
     <input type="color" id="arrowStrokeColor" value="#003d8a" title="Arrow stroke color" />
   </div>
 
+  <!-- Size Settings toggle (next to Settings button) -->
+  <button id="sizeMenuToggle">Size Settings</button>
+
+  <div id="sizeMenu">
+    <label for="arrowSizeSlider">Arrow Size</label>
+    <input id="arrowSizeSlider" type="range" min="20" max="80" value="36">
+
+    <label for="trailWidthSlider">Trail Width</label>
+    <input id="trailWidthSlider" type="range" min="1" max="12" value="3">
+
+    <label for="pointSizeSlider">Point Size</label>
+    <input id="pointSizeSlider" type="range" min="4" max="32" value="12">
+  </div>
+
   <button id="settingsBtn">Settings</button>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -163,6 +194,11 @@
     let pointsColor = "#0078ff";
     let arrowFillColor = "#0078ff";
     let arrowStrokeColor = "#003d8a";
+
+    // Size defaults (persistent for the session)
+    let arrowSize = 36;
+    let trailWidth = 3;
+    let pointSize = 12;
 
     // Follow state
     let follow = false;
@@ -198,7 +234,7 @@
                   feature.properties.trail_type === "connector")
                   ? "#2ecc71"
                   : "#e74c3c",
-              weight: 3,
+              weight: trailWidth,
               opacity: 0.95,
             }),
             onEachFeature: (feature, layer) => {
@@ -229,7 +265,7 @@
           reroutesLayer = L.geoJSON(data, {
             style: (feature) => ({
               color: "#3498db",
-              weight: 3,
+              weight: trailWidth,
               opacity: 0.95,
             }),
             onEachFeature: (feature, layer) => {
@@ -251,7 +287,7 @@
         .then(data => {
           pointsLayer = L.geoJSON(data, {
             pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-              radius: 12,             // larger for mobile
+              radius: pointSize,             // larger for mobile, now dynamic
               fillColor: pointsColor,
               color: arrowStrokeColor,
               weight: 1,
@@ -259,7 +295,7 @@
               fillOpacity: 0.95,
             }),
             onEachFeature: (feature, layer) => {
-              const props = feature.properties || props.Name || {};
+              const props = feature.properties || {};
               if (props.Name) {
                 layer.bindPopup(`<strong>${escapeHtml(props.Name)}</strong>`);
               }
@@ -278,21 +314,22 @@
       .catch(err => { console.error("Layer load error:", err); alert("Failed to load layers (see console)."); });
 
     // --- Arrow icon handling ---
-    function createArrowSvg(fill, stroke) {
+    function createArrowSvg(fill, stroke, size) {
+      // size used for width/height and viewbox scaling is fine with square svg
       return encodeURIComponent(
-        `<svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        `<svg width="${size}" height="${size}" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 2 L20 22 L12 17 L4 22 Z" fill="${fill}" stroke="${stroke}" stroke-width="0.7"/>
         </svg>`
       );
     }
 
-    let arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor);
+    let arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor, arrowSize);
     let arrowIcon = L.divIcon({
       className: "user-arrow-icon",
-      html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:36px;height:36px;transform: rotate(0deg);">`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18],
-      popupAnchor: [0, -18],
+      html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:${arrowSize}px;height:${arrowSize}px;transform: rotate(0deg);">`,
+      iconSize: [arrowSize, arrowSize],
+      iconAnchor: [arrowSize/2, arrowSize/2],
+      popupAnchor: [0, -arrowSize/2],
     });
 
     function setUserMarker(lat, lon, accuracy, heading) {
@@ -318,13 +355,13 @@
     }
 
     function updateArrowIcon() {
-      arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor);
+      arrowSvg = createArrowSvg(arrowFillColor, arrowStrokeColor, arrowSize);
       arrowIcon = L.divIcon({
         className: "user-arrow-icon",
-        html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:36px;height:36px;transform: rotate(0deg);">`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-        popupAnchor: [0, -18],
+        html: `<img src="data:image/svg+xml;utf8,${arrowSvg}" style="width:${arrowSize}px;height:${arrowSize}px;transform: rotate(0deg);">`,
+        iconSize: [arrowSize, arrowSize],
+        iconAnchor: [arrowSize/2, arrowSize/2],
+        popupAnchor: [0, -arrowSize/2],
       });
       if (userMarker) {
         userMarker.setIcon(arrowIcon);
@@ -500,91 +537,121 @@
       }
     };
 
-    // Note: No toggle button for reroutes; always visible.
-
-    // Color menu toggle
-    const colorMenuToggle = document.getElementById("colorMenuToggle");
-    const colorMenu = document.getElementById("colorMenu");
-    colorMenuToggle.onclick = () => {
-      if (colorMenu.style.display === "none" || colorMenu.style.display === "") {
-        colorMenu.style.display = "block";
-      } else {
-        colorMenu.style.display = "none";
-      }
-    };
-
-    // Color pickers
+    // Color menu logic (unchanged behavior)
+    const colorMenuToggle = document.getElementById('colorMenuToggle');
+    const colorMenu = document.getElementById('colorMenu');
     const pointsColorPicker = document.getElementById("pointsColor");
     const arrowFillColorPicker = document.getElementById("arrowFillColor");
     const arrowStrokeColorPicker = document.getElementById("arrowStrokeColor");
 
-    pointsColorPicker.oninput = () => {
+    colorMenuToggle.addEventListener('click', () => {
+      colorMenu.style.display = (colorMenu.style.display === 'block') ? 'none' : 'block';
+    });
+
+    pointsColorPicker.addEventListener('input', () => {
       pointsColor = pointsColorPicker.value;
       if (pointsLayer) {
-        pointsLayer.setStyle({
-          fillColor: pointsColor,
-          color: arrowStrokeColor,
+        pointsLayer.eachLayer(layer => {
+          if (layer.setStyle) layer.setStyle({ fillColor: pointsColor });
         });
       }
-    };
+    });
 
-    arrowFillColorPicker.oninput = () => {
+    arrowFillColorPicker.addEventListener('input', () => {
       arrowFillColor = arrowFillColorPicker.value;
       updateArrowIcon();
-    };
-
-    arrowStrokeColorPicker.oninput = () => {
+    });
+    arrowStrokeColorPicker.addEventListener('input', () => {
       arrowStrokeColor = arrowStrokeColorPicker.value;
       if (pointsLayer) {
-        pointsLayer.setStyle({
-          color: arrowStrokeColor,
+        pointsLayer.eachLayer(layer => {
+          if (layer.setStyle) layer.setStyle({ color: arrowStrokeColor });
         });
       }
       updateArrowIcon();
-    };
+    });
 
-    // Distance function (Haversine in meters)
+    // --- Size Menu logic ---
+    const sizeMenuToggle = document.getElementById('sizeMenuToggle');
+    const sizeMenu = document.getElementById('sizeMenu');
+    const arrowSizeSlider = document.getElementById('arrowSizeSlider');
+    const trailWidthSlider = document.getElementById('trailWidthSlider');
+    const pointSizeSlider = document.getElementById('pointSizeSlider');
+
+    // open/close size menu
+    sizeMenuToggle.addEventListener('click', () => {
+      sizeMenu.style.display = (sizeMenu.style.display === 'block') ? 'none' : 'block';
+    });
+
+    // apply sizes live (persistent while page open)
+    arrowSizeSlider.addEventListener('input', (e) => {
+      arrowSize = +e.target.value;
+      updateArrowIcon();
+    });
+
+    trailWidthSlider.addEventListener('input', (e) => {
+      trailWidth = +e.target.value;
+      if (trailsLayer && trailsLayer.setStyle) trailsLayer.setStyle({ weight: trailWidth });
+      if (reroutesLayer && reroutesLayer.setStyle) reroutesLayer.setStyle({ weight: trailWidth });
+    });
+
+    pointSizeSlider.addEventListener('input', (e) => {
+      pointSize = +e.target.value;
+      if (pointsLayer) {
+        pointsLayer.eachLayer(layer => {
+          if (layer.setStyle) layer.setStyle({ radius: pointSize });
+        });
+      }
+    });
+
+    // --- Helpers ---
     function distanceMeters(lat1, lon1, lat2, lon2) {
-      function toRad(x) { return x * Math.PI / 180; }
       const R = 6371000;
+      const toRad = (x) => (x * Math.PI) / 180;
       const dLat = toRad(lat2 - lat1);
       const dLon = toRad(lon2 - lon1);
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
-const settingsBtn = document.getElementById('settingsBtn');
+
+    // --- SETTINGS BUTTON logic (hide/show other controls) ---
+    const settingsBtn = document.getElementById('settingsBtn');
 
     const controlsToToggle = [
       document.querySelector('.top-controls'),
       colorMenuToggle,
       colorMenu,
-      followZoomUI
+      followZoomUI,
+      sizeMenuToggle,
+      sizeMenu
     ];
 
     let controlsHidden = false;
+    settingsBtn.textContent = "Hide Settings";
 
-settingsBtn.textContent = "Hide Settings"; // initial state
-
-settingsBtn.addEventListener('click', () => {
-  controlsHidden = !controlsHidden;
-  controlsToToggle.forEach(el => {
-    if (!el) return;
-    if (el === followZoomUI) {
-      el.style.display = (!controlsHidden && follow) ? "block" : "none";
-    } else if (el === colorMenu) {
-      el.style.display = controlsHidden ? "none" : (colorMenu.style.display || "none");
-    } else if (el === colorMenuToggle) {
-      el.style.display = controlsHidden ? "none" : "block";
-    } else {
-      el.style.display = controlsHidden ? "none" : "flex";
-    }
-  });
-  settingsBtn.textContent = controlsHidden ? "Show Settings" : "Hide Settings";
-});
-
+    settingsBtn.addEventListener('click', () => {
+      controlsHidden = !controlsHidden;
+      controlsToToggle.forEach(el => {
+        if (!el) return;
+        if (el === followZoomUI) {
+          el.style.display = (!controlsHidden && follow) ? "block" : "none";
+        } else if (el === colorMenu || el === sizeMenu) {
+          el.style.display = controlsHidden ? "none" : (el.style.display || "none");
+        } else if (el === colorMenuToggle || el === sizeMenuToggle) {
+          el.style.display = controlsHidden ? "none" : "block";
+        } else {
+          // .top-controls container
+          el.style.display = controlsHidden ? "none" : "flex";
+        }
+      });
+      settingsBtn.textContent = controlsHidden ? "Show Settings" : "Hide Settings";
+    });
   </script>
 </body>
 </html>
