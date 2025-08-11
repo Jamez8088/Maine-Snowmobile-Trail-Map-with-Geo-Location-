@@ -23,6 +23,13 @@ Points: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois
 Trails: https://hub.arcgis.com/datasets/COAGIS::gps-trailmasters-snowmobile-pois/explore?layer=2&location=45.208741%2C-68.925947%2C7.69
 
 # Patch Notes:
+[8/10/2025 - Ver. 0.3.3]
+- Manually traced some new/club trails, highlighted in blue. More will be coming soon.
+- Shrunk down all button sizes.
+   - Increased the variable size parameters to better suit mobile devices.
+- Added Hide Settings/Show Settings button to the bottom right to show and hide all context buttons.
+- Added zoom slider while follow is on for fixed zoom control. 
+
 [8/9/2025 - Ver. 0.3]
   - Updated the map version from 2015 to 2017.
       - A much more recent and dense version of the map, still not final but better.
