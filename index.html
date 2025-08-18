@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>MEITSMAP0.3.4</title>
+<title>MEITSMAP0.4</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -126,6 +126,35 @@
     #colorMenuToggle { padding: 10px 14px; }
     #settingsBtn, #sizeMenuToggle { padding: 10px 14px; }
   }
+  .speedometer-box {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.95);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    cursor: move;
+    z-index: 1100;
+  }
+  .trail-indicator {
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.95);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-family: system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    z-index: 1100;
+  }
 </style>
 </head>
 <body>
@@ -148,14 +177,20 @@
   <button id="colorMenuToggle">Customize Colors</button>
   <div id="colorMenu">
     <label for="pointsColor">Points Color</label>
-    <input type="color" id="pointsColor" value="#0078ff" title="Points fill color" />
-
-    <label for="arrowFillColor">Arrow Fill Color</label>
-    <input type="color" id="arrowFillColor" value="#0078ff" title="Arrow fill color" />
-
-    <label for="arrowStrokeColor">Arrow Stroke Color</label>
-    <input type="color" id="arrowStrokeColor" value="#003d8a" title="Arrow stroke color" />
+    <input type="color" id="pointsColor" value="#0078ff" />
+    <label for="arrowFillColor">Arrow Fill</label>
+    <input type="color" id="arrowFillColor" value="#0078ff" />
+    <label for="arrowStrokeColor">Arrow Stroke</label>
+    <input type="color" id="arrowStrokeColor" value="#003d8a" />
+    <label for="speedColor">Speedometer Color</label>
+    <input type="color" id="speedColor" value="#000000" />
+    <label for="trailColor">Trail Indicator Color</label>
+    <input type="color" id="trailColor" value="#000000" />
+    <button id="toggleIconType">Icon: Arrow</button>
   </div>
+
+  <div class="speedometer-box" id="speedBox">0 MPH</div>
+  <div class="trail-indicator" id="trailIndicator">No Trail</div>
 
   <!-- Size Settings toggle (next to Settings button) -->
   <button id="sizeMenuToggle">Size Settings</button>
